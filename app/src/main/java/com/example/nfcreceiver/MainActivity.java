@@ -14,6 +14,7 @@ import android.widget.Toast;
 import android.widget.ToggleButton;
 
 
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.simple.parser.JSONParser;
 
@@ -160,4 +161,27 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+
+    private void addOrder(String userId, int categoryId) {
+        API.addOrder(userId, categoryId, addButtonListener);
+    }
+
+    ResponseListener addButtonListener = new ResponseListener() {
+        @Override
+        public void callback(String response) {
+            try {
+                JSONObject jsonObject = new JSONObject(response);
+                if ((int) jsonObject.get("code") != 0) {
+                    String msg = (String) jsonObject.get("msg");
+                    //TODO: 发出声音，内容为msg
+                }
+                else {
+                    //TODO: 发出声音，下单成功
+                }
+            }
+            catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    };
 }
