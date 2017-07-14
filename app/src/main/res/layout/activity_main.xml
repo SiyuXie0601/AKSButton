@@ -21,6 +21,8 @@
         android:layout_height="wrap_content"
         android:contentDescription="按钮背景" />
     <ImageView
+        android:clickable="true"
+        android:focusable="true"
         android:id="@+id/button"
         android:src="@drawable/circle"
         android:layout_width="40dp"
