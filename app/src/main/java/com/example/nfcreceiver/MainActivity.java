@@ -1,7 +1,10 @@
 package com.example.nfcreceiver;
 
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiManager;
 import android.nfc.NdefMessage;
@@ -10,14 +13,11 @@ import android.os.Environment;
 import android.os.Parcelable;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.Toast;
 import android.widget.ToggleButton;
-
-
 import com.example.nfcreceiver.NetPack.ThreadTask;
 import com.iflytek.cloud.ErrorCode;
 import com.iflytek.cloud.InitListener;
@@ -35,20 +35,24 @@ import org.json.simple.parser.JSONParser;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.IOException;
+
+import static android.net.NetworkInfo.DetailedState.CONNECTED;
 
 
 public class MainActivity extends AppCompatActivity {
 
     NfcAdapter mNfcAdapter;
+    SpeechSyn aksSpeech;
+    InfoIO infoIO;
+    WifiConnection wifiConnecter;
     private Context context;
     private ToggleButton mToggleButton;
     private Button buyButton;
-    String userID;
-    String SSID;
-    String PWD;
-    int category_id;
-    SpeechSynthesizer mTts;
-    private Toast mToast;
+    String userid;
+    String ssid;
+    String pwd;
+    int categoryid;
 
 
     @Override
@@ -56,15 +60,20 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         API.init();
         setContentView(R.layout.activity_main);
-        context = this;
-        setAppId();
-        InitSpeechSynthesizer();
+        this.context = this;
+        aksSpeech = new SpeechSyn(context);
+        try {
+            infoIO = new InfoIO("info.json", context, aksSpeech);
+            wifiConnecter = new WifiConnection(context, aksSpeech);
+        }catch(IOException e){
+
+        }
         initView();//初始化控件方法
-        readInfo();
+        infoIO.readInfo();
         // Check for available NFC Adapter
         mNfcAdapter = NfcAdapter.getDefaultAdapter(this);
         if (mNfcAdapter == null) {
-            mTts.startSpeaking( "请开启NFC功能",mTtsListener );
+            aksSpeech.speaking("请开启NFC功能");
             finish();
             return;
         }
@@ -101,7 +110,7 @@ public class MainActivity extends AppCompatActivity {
             //store info
             JSONObject JsonObj = new JSONObject(wholeJson);
             if(checkInfoComplete(JsonObj)){
-                storeInfo(JsonObj);
+                infoIO.storeInfo(JsonObj);
             }
         }catch (Exception e)
         {
@@ -109,88 +118,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void WIFIConnect(){
-        WifiConfiguration wifiConfig = new WifiConfiguration();
-        Toast.makeText(this, PWD, Toast.LENGTH_LONG).show();
-        Toast.makeText(this, SSID, Toast.LENGTH_LONG).show();
-        Toast.makeText(this, userID, Toast.LENGTH_LONG).show();
-        wifiConfig.SSID = String.format("\"%s\"", SSID);
-        wifiConfig.preSharedKey = String.format("\"%s\"", PWD);
-        WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
-
-        int netId = wifiManager.addNetwork(wifiConfig);
-        wifiManager.disconnect();
-        wifiManager.enableNetwork(netId, true);
-        boolean connected = wifiManager.reconnect();
-        if(connected){
-            mTts.startSpeaking( "wifi已连接",mTtsListener );
-        }
-        else{
-            mTts.startSpeaking( "wifi设置有误，请重新设置后再初始化按钮",mTtsListener );
-        }
-    }
-
-    public void storeInfo(JSONObject JsonInfo){
-        try {
-            File filePath;
-            FileWriter fWriter;
-            filePath = new File(context.getExternalFilesDir(null), "info.json");
-            fWriter = new FileWriter(filePath,false);
-            try {
-                JsonInfo.put("category_id",1);
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-            fWriter.write(JsonInfo.toString());
-            fWriter.flush();
-            mTts.startSpeaking( "按钮初始化成功",mTtsListener );
-        }catch (java.io.IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void readInfo(){
-        try {
-            //read
-            File filePath;
-            filePath = new File(context.getExternalFilesDir(null), "info.json");
-            JSONParser parser = new JSONParser();
-            Object obj = parser.parse(new FileReader(filePath));
-            JSONObject JsonObj = new JSONObject(obj.toString());
-            if(checkInfoComplete(JsonObj)){
-                userID = (String)JsonObj.get("UserID");
-                SSID = (String)JsonObj.get("SSID");
-                PWD = (String)JsonObj.get("PWD");
-                category_id = (int)JsonObj.get("category_id");
-            }
-        } catch (Exception e)
-        {
-            e.printStackTrace();
-        }
-    }
-
-    private boolean checkInfoComplete(JSONObject JsonInfo){
-        if((!JsonInfo.has("SSID"))||(!JsonInfo.has("PWD"))){
-            mTts.startSpeaking( "请在配置网络环境后再初始化按钮",mTtsListener );
-            return false;
-        }
-        if(!JsonInfo.has("UserID")){
-            mTts.startSpeaking( "请在注册后再初始化按钮",mTtsListener );
-            return false;
-        }
-        return true;
-    }
-
     private void initView() {
         mToggleButton = (ToggleButton) findViewById(R.id.togglebutton); //获取到控件
         mToggleButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 if (isChecked) {
-                    mTts.startSpeaking( "按钮电源已开启",mTtsListener );
-                    readInfo();
-                    WIFIConnect();
+                    loadInfo();
                 } else {
-                    mTts.startSpeaking( "按钮电源已关闭",mTtsListener );
+
                 }
             }
         });
@@ -198,7 +133,14 @@ public class MainActivity extends AppCompatActivity {
         buyButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                addOrder(userID,category_id);
+                ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+                NetworkInfo activeNetwork = cm.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+                if(activeNetwork.getDetailedState()==CONNECTED){
+                    addOrder(userid, categoryid);
+                }
+                else{
+                    aksSpeech.speaking("无线设置有误，请重新设置后再初始化按钮");
+                }
             }
         });
 
@@ -218,10 +160,10 @@ public class MainActivity extends AppCompatActivity {
                 JSONObject jsonObject = new JSONObject(response);
                 if ((int) jsonObject.get("code") != 0) {
                     String msg = (String) jsonObject.get("msg");
-                    mTts.startSpeaking( msg,mTtsListener );
+                    aksSpeech.speaking(msg);
                 }
                 else {
-                    mTts.startSpeaking( "下单成功",mTtsListener );
+                    aksSpeech.speaking("下单成功");
                 }
             }
             catch (Exception e) {
@@ -230,40 +172,66 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    public void InitSpeechSynthesizer(){
-        mTts= SpeechSynthesizer.createSynthesizer(context, mInitListener);
-        //mToast=Toast.makeText(context, "", Toast.LENGTH_SHORT);
-        //2.合成参数设置
-        mTts.setParameter(SpeechConstant.VOICE_NAME, "xiaoyan");
-        mTts.setParameter(SpeechConstant.SPEED, "50");//设置语速
-        mTts.setParameter(SpeechConstant.VOLUME, "80");//设置音量，范围 0~100
-        mTts.setParameter(ResourceUtil.TTS_RES_PATH, getResourcePath());//设置发音人资源路径
-        mTts.setParameter(SpeechConstant.ENGINE_TYPE, SpeechConstant.TYPE_LOCAL); //设置本地
-        mTts.setParameter(SpeechConstant.TTS_AUDIO_PATH, Environment.getExternalStorageDirectory()+"/xf_yuyin/tts.wav");
+    private boolean checkInfoComplete(JSONObject JsonInfo){
+        if((!JsonInfo.has("SSID"))||(!JsonInfo.has("PWD"))){
+            aksSpeech.speaking("请在配置网络环境后再初始化按钮");
+            return false;
+        }
+        if(!JsonInfo.has("UserID")){
+            aksSpeech.speaking("请在注册后再初始化按钮");
+            return false;
+        }
+        return true;
     }
 
-    /**
-     * 获取本地assets文件夹下的发音人资源路径
-     */
-    private String getResourcePath() {
-        StringBuffer tempBuffer = new StringBuffer();
-        //合成通用资源
-        tempBuffer.append(ResourceUtil.generateResourcePath(context, ResourceUtil.RESOURCE_TYPE.assets, "tts/common.jet"));
-        tempBuffer.append(";");
-        //发音人资源
-        tempBuffer.append(ResourceUtil.generateResourcePath(context, ResourceUtil.RESOURCE_TYPE.assets, "tts/"+ "xiaoyan" +".jet"));
-        return tempBuffer.toString();
+    private void loadInfo(){
+        JSONObject jsonObject = infoIO.readInfo();
+        if(checkInfoComplete(jsonObject)) {
+            try {
+                userid = (String) jsonObject.get("UserID");
+                ssid = (String) jsonObject.get("SSID");
+                pwd = (String) jsonObject.get("PWD");
+                categoryid = (int) jsonObject.get("category_id");
+                wifiConnecter.WIFIConnect(ssid, pwd);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+
+
+class SpeechSyn{
+    private Context context;
+    private String app_id = "=59672315";
+    private SpeechSynthesizer mTts;
+    public static String voicerLocal="xiaoyan";
+    private String speed = "50"; //合成语音音速
+    private String volume = "100"; //合成语音音量,0-100
+
+    public SpeechSyn(Context context){
+        this.context = context;
+        setAppId();
+        init();
+        setParams();
     }
 
-    /**
-     * 初始化监听
-     */
+    public void setAppId(){
+        StringBuffer param = new StringBuffer();
+        param.append(SpeechConstant.APPID + app_id);
+        param.append(",");
+        param.append(SpeechConstant.ENGINE_MODE+"="+SpeechConstant.MODE_MSC);
+        SpeechUtility.createUtility(context, param.toString());
+    }
+
+    private void init() {
+        mTts = SpeechSynthesizer.createSynthesizer(context, mInitListener);
+    }
+
+    //初始化监听
     private InitListener mInitListener = new InitListener() {
-
         @Override
         public void onInit(int arg0) {
-            // TODO Auto-generated method stub
-            //Log.d(TAG, "InitListener init, code=" + arg0);
             if(arg0 != ErrorCode.SUCCESS) {
                 toastMessage("初始化失败，错误码：" + arg0);
             } else {
@@ -271,6 +239,19 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     };
+
+    public void toastMessage(String msg) {
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show();
+    }
+
+    private void setParams() {
+        mTts.setParameter(SpeechConstant.VOICE_NAME, voicerLocal);
+        mTts.setParameter(SpeechConstant.SPEED, speed);//设置语速
+        mTts.setParameter(SpeechConstant.VOLUME, volume);//设置音量，范围 0~100
+        mTts.setParameter(ResourceUtil.TTS_RES_PATH, getResourcePath());//设置发音人资源路径
+        mTts.setParameter(SpeechConstant.ENGINE_TYPE, SpeechConstant.TYPE_LOCAL); //设置本地
+        mTts.setParameter(SpeechConstant.TTS_AUDIO_PATH, Environment.getExternalStorageDirectory()+"/xf_yuyin/tts.wav");
+    }
 
     private SynthesizerListener mTtsListener = new SynthesizerListener() {
 
@@ -318,17 +299,99 @@ public class MainActivity extends AppCompatActivity {
 
         }
     };
-    public void toastMessage(String msg) {
-        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show();
+
+    //获取本地assets文件夹下的发音人资源路径
+    private String getResourcePath() {
+        StringBuffer tempBuffer = new StringBuffer();
+        //合成通用资源
+        tempBuffer.append(ResourceUtil.generateResourcePath(context, ResourceUtil.RESOURCE_TYPE.assets, "tts/common.jet"));
+        tempBuffer.append(";");
+        //发音人资源
+        tempBuffer.append(ResourceUtil.generateResourcePath(context, ResourceUtil.RESOURCE_TYPE.assets, "tts/"+ "xiaoyan" +".jet"));
+        return tempBuffer.toString();
     }
 
-    public void setAppId(){
-        StringBuffer param = new StringBuffer();
-        param.append(SpeechConstant.APPID +"=59672315");
-        param.append(",");
-        // 设置使用v5+
-        param.append(SpeechConstant.ENGINE_MODE+"="+SpeechConstant.MODE_MSC);
-        SpeechUtility.createUtility(context, param.toString());
+    public void speaking(String str){
+        mTts.startSpeaking( str,mTtsListener );
     }
-
 }
+
+class InfoIO{
+    private File fileLocation;
+    private Context context;
+    private FileWriter fileWriter;
+    private JSONParser parser;
+    private SpeechSyn aksSpeech;
+
+
+    public InfoIO(String fileName, Context context, SpeechSyn aksSpeech) throws IOException {
+        this.context = context;
+        this.aksSpeech = aksSpeech;
+        fileLocation = new File(context.getExternalFilesDir(null), "info.json");
+    }
+
+    public void storeInfo(JSONObject JsonInfo){
+        try {
+            fileWriter = new FileWriter(fileLocation,false);
+            JsonInfo.put("category_id",1);
+            fileWriter.write(JsonInfo.toString());
+            fileWriter.flush();
+            aksSpeech.speaking("按钮初始化成功");
+        }catch (java.io.IOException e) {
+            e.printStackTrace();
+        }catch(JSONException e){
+
+        }
+    }
+
+    public JSONObject readInfo(){
+        try {
+            parser = new JSONParser();
+            Object obj = parser.parse(new FileReader(fileLocation));
+            JSONObject JsonObj = new JSONObject(obj.toString());
+            return JsonObj;
+        } catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+        return null;
+    }
+}
+
+class WifiConnection{
+    private Context context;
+    private String ssid;
+    private String pwd;
+    private ConnectivityManager cm;
+    private NetworkInfo wifiInfo;
+    private SpeechSyn aksSpeech;
+
+    public WifiConnection(Context context, SpeechSyn aksSpeech){
+        this.context = context;
+        this.aksSpeech = aksSpeech;
+        cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+    }
+
+    public void WIFIConnect(String ssid, String pwd){
+        this.ssid = ssid;
+        this.pwd = pwd;
+        wifiInfo = cm.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+        if(wifiInfo.getDetailedState()==CONNECTED){
+            aksSpeech.speaking("无线已经连接");
+        }
+        //need to connect to wifi
+        else{
+            WifiConfiguration wifiConfig = new WifiConfiguration();
+            Toast.makeText(context, pwd, Toast.LENGTH_LONG).show();
+            Toast.makeText(context, ssid, Toast.LENGTH_LONG).show();
+            wifiConfig.SSID = String.format("\"%s\"", ssid);
+            wifiConfig.preSharedKey = String.format("\"%s\"", pwd);
+            WifiManager wifiManager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+            int netId = wifiManager.addNetwork(wifiConfig);
+            wifiManager.disconnect();
+            wifiManager.enableNetwork(netId, true);
+            wifiManager.reconnect();
+        }
+    }
+}
+

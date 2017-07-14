@@ -32,6 +32,11 @@
                 <data android:mimeType="application/vnd.com.example.android.beam"/>
             </intent-filter>
         </activity>
+        <receiver android:name="com.example.nfcreceiver.WifiReceiver" >
+            <intent-filter android:priority="100">
+                <action android:name="android.net.wifi.STATE_CHANGE" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
