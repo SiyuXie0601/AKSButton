@@ -16,6 +16,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.ImageView;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 import com.example.nfcreceiver.NetPack.ThreadTask;
@@ -48,7 +49,7 @@ public class MainActivity extends AppCompatActivity {
     WifiConnection wifiConnecter;
     private Context context;
     private ToggleButton mToggleButton;
-    private Button buyButton;
+    private ImageView buyButton;
     String userid;
     String ssid;
     String pwd;
@@ -129,7 +130,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
-        buyButton = (Button) findViewById(R.id.button);
+        buyButton = (ImageView) findViewById(R.id.button);
         buyButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
