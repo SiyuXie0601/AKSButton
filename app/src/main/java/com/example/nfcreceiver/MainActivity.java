@@ -175,7 +175,7 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean checkInfoComplete(JSONObject JsonInfo){
         if(JsonInfo == null){
-            aksSpeech.speaking("请初始化按钮后再开启电源");
+            aksSpeech.speaking("请初始化按钮后再开启电源按钮");
             return false;
         }
         if((!JsonInfo.has("SSID"))||(!JsonInfo.has("PWD"))){
