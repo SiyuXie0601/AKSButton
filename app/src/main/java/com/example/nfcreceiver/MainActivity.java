@@ -174,6 +174,10 @@ public class MainActivity extends AppCompatActivity {
     };
 
     private boolean checkInfoComplete(JSONObject JsonInfo){
+        if(JsonInfo == null){
+            aksSpeech.speaking("请初始化按钮后再开启电源");
+            return false;
+        }
         if((!JsonInfo.has("SSID"))||(!JsonInfo.has("PWD"))){
             aksSpeech.speaking("请在配置网络环境后再初始化按钮");
             return false;
@@ -348,9 +352,14 @@ class InfoIO{
     public JSONObject readInfo(){
         try {
             parser = new JSONParser();
-            Object obj = parser.parse(new FileReader(fileLocation));
-            JSONObject JsonObj = new JSONObject(obj.toString());
-            return JsonObj;
+            if(fileLocation.exists()) {
+                Object obj = parser.parse(new FileReader(fileLocation));
+                JSONObject JsonObj = new JSONObject(obj.toString());
+                return JsonObj;
+            }
+            else{
+                return null;
+            }
         } catch (Exception e)
         {
             e.printStackTrace();
